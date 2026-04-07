@@ -244,7 +244,11 @@ auto request_parser::eof() -> bool {
         return true; 
     }
 
-    if (m_identifiedMethod == get || m_identifiedMethod == options) {
+    if (m_identifiedMethod == post  ||
+        m_identifiedMethod == put   ||
+        m_identifiedMethod == patch || 
+        m_identifiedMethod == get || 
+        m_identifiedMethod == options) {
         return true;
     }
     
@@ -271,6 +275,12 @@ auto request_parser::finalize() -> std::expected<void, request_parse_error> {
     if (!eof()) {
         return std::unexpected(request_parse_error("Attempted to finalize before request reached eof()."));
     }
+    util::log::debug("finalize(): method={}, identifiedCL={}, headerSize={}, bufSize={}",
+        static_cast<int>(m_identifiedMethod.value_or(unknown)),
+        m_identifiedContentLength.has_value() ? (long)*m_identifiedContentLength : -1L,
+        m_identifiedHeaderSize.value_or(0),
+        m_buffer->size()
+    );
 
     const auto request_sv = m_buffer->view();
     
@@ -298,28 +308,50 @@ auto request_parser::finalize() -> std::expected<void, request_parse_error> {
     
     m_headerSize = *m_identifiedHeaderSize;
 
-    if (m_parsedMethod == post) {
+    if (m_parsedMethod == post  ||
+    m_parsedMethod == put   ||
+    m_parsedMethod == patch) {
+
+        // m_identifiedContentLength se popula en eof() via parse_and_store_content_length().
+        // Como fallback, intentar leerlo de m_headers (ya parseados arriba).
         if (!m_identifiedContentLength.has_value()) {
-             return std::unexpected(request_parse_error("POST request without valid Content-Length header."));
+            if (auto it = m_headers.find("Content-Length"); it != m_headers.end()) {
+                size_t cl = 0;
+                auto sv = it->second;
+                auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), cl);
+                if (ec == std::errc() && ptr == sv.data() + sv.size()) {
+                    m_identifiedContentLength = cl;
+                }
+            }
         }
-        m_contentLength = *m_identifiedContentLength;
+
+        if (!m_identifiedContentLength.has_value()) {
+            if (m_parsedMethod == post) {
+                return std::unexpected(request_parse_error(
+                    "POST request without valid Content-Length header."));
+            }
+            m_contentLength = 0;
+        } else {
+            m_contentLength = *m_identifiedContentLength;
+        }
 
         if (m_contentLength > 0) {
             auto it = m_headers.find("content-type");
             if (it == m_headers.end()) {
-                return std::unexpected(request_parse_error("POST request with body is missing Content-Type header."));
+                return std::unexpected(request_parse_error(
+                    "Request with body is missing Content-Type header."));
             }
 
             const auto& content_type = it->second;
-            if (!content_type.starts_with("application/json") && !content_type.starts_with("multipart/form-data")) {
+            if (!content_type.starts_with("application/json") && 
+                !content_type.starts_with("multipart/form-data")) {
                 return std::unexpected(request_parse_error(
-                    std::format("Unsupported Content-Type for POST: {}", content_type)
-                ));
+                    std::format("Unsupported Content-Type: {}", content_type)));
             }
-        }
-        
-        if (auto err = parse_body()) {
-            return std::unexpected(*err);
+
+            if (auto err = parse_body()) {
+                return std::unexpected(*err);
+            }
         }
     }
 
@@ -373,6 +405,10 @@ auto request_parser::parse_and_store_method() -> bool {
                 m_identifiedMethod = get;
             } else if (method_sv == "POST"sv) {
                 m_identifiedMethod = post;
+            } else if (method_sv == "PUT"sv) {
+                m_identifiedMethod = put;
+            } else if (method_sv == "PATCH"sv) {
+                m_identifiedMethod = patch;
             } else if (method_sv == "OPTIONS"sv) {
                 m_identifiedMethod = options;
             } else {

@@ -39,10 +39,17 @@ int main() {
     try {
         util::log::info("Application starting...");
         server s;
-        s.register_api_regex("/.*", http::method::any, [](const http::request&, http::response&) {
-                util::log::debug("Processing request...");
-            },
-            false
+        s.register_api_regex("/.*", http::method::any, [](const http::request& req, http::response& res) {
+            util::log::debug("Processing request...");
+            
+            const auto& body = req.get_body();
+            if (const auto* body_sv = std::get_if<std::string_view>(&body); body_sv && !body_sv->empty()) {
+                res.set_body(ok, std::string(*body_sv));
+            } else {
+                res.set_body(ok, R"({})");
+            }
+        },
+        false
         );
 
         s.start();

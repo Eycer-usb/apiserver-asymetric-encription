@@ -80,30 +80,37 @@ void server::io_worker::handle_epoll_event(const epoll_event& event) {
     const uint32_t ev = event.events;
 
     if (fd == m_listening_fd) {
+        util::log::debug("Worker {} handling new connection", std::this_thread::get_id());
         on_connect();
         return;
     } 
     if (fd == m_timer_fd) {
+        // util::log::debug("Worker {} handling timer tick", std::this_thread::get_id());
         on_timer_tick();
         return;
     } 
     if (fd == m_event_fd) {
+        util::log::debug("Worker {} handling response ready", std::this_thread::get_id());
         on_response_ready();
         return;
     } 
     
     if ((ev & EPOLLIN) != 0) {
+        util::log::debug("Worker {} handling read on fd {}", std::this_thread::get_id(), fd);
         on_read(fd);
     }
     
     if ((ev & EPOLLOUT) != 0) {
+        util::log::debug("Worker {} handling write on fd {}", std::this_thread::get_id(), fd);
         on_write(fd);
     }
     
     // Flattened nested 'if' statements to pass Sonar checks
     if ((ev & (EPOLLERR | EPOLLHUP)) != 0 && m_connections.contains(fd)) {
+        util::log::debug("Worker {} handling error on fd {}", std::this_thread::get_id(), fd);
         close_connection(fd);
     } else if ((ev & EPOLLRDHUP) != 0) {
+        util::log::debug("Worker {} handling EPOLLRDHUP on fd {}", std::this_thread::get_id(), fd);
         if (auto it = m_connections.find(fd); it != m_connections.end()) {
             it->second.close_after_write = true;
         }
@@ -476,13 +483,23 @@ void server::io_worker::touch_connection(connection_state& conn) {
 }
 
 void server::io_worker::on_read(int fd) {
+    util::log::debug("Reading on fd {}", fd);
     if (auto it = m_connections.find(fd); it != m_connections.end()
          && handle_socket_read(it->second, fd)) {
+        util::log::debug("Read complete on fd {}", fd);
+        util::log::debug("Checking if request is complete on fd {}", fd);
+        util::log::debug("Current parser buffer size for fd {}: {}", fd, it->second.parser.get_buffer().size());
+        // Is EOF reached and request is complete?
+        // If so, we can process the request
         if (it->second.parser.eof()) {
+            util::log::debug("Request complete on fd {}", fd);
             process_request(fd);
         } else {
+            util::log::debug("Rearming epoll for reading fd {}", fd);
             modify_epoll(fd, EPOLLIN | EPOLLONESHOT);
         }
+    } else {
+        util::log::warn("Read event for unknown or closed fd {}", fd);
     }
 }
 
@@ -500,6 +517,7 @@ void server::io_worker::do_write(int fd, connection_state& conn) {
     touch_connection(conn);
 
     while (res.available_size() > 0) {
+        util::log::debug("Sending {} bytes on fd {}", res.available_size(), fd);
         ssize_t bytes_sent = write(fd, res.buffer().data(), res.buffer().size());
         if (bytes_sent == -1) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -539,7 +557,7 @@ void server::io_worker::close_connection(int fd) {
 
 bool server::io_worker::handle_socket_read(connection_state& conn, int fd) {
     touch_connection(conn);
-    
+    util::log::debug("Starting socket read loop on fd {}", fd);
     while (true) {
         try {
             auto buffer = conn.parser.get_buffer();
@@ -553,8 +571,10 @@ bool server::io_worker::handle_socket_read(connection_state& conn, int fd) {
             
             // Handle successful read first to prevent nested error trees
             if (bytes_read > 0) {
+                util::log::debug("Read {} bytes from fd {}", bytes_read, fd);
                 conn.parser.update_pos(bytes_read);
             } else {
+                util::log::debug("Read returned {} on fd {}", bytes_read, fd);
                 // Flattened error and EOF handling (Max Depth: 3)
                 if (bytes_read == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
                     // Normal exit: socket read buffer is fully drained
@@ -587,6 +607,7 @@ bool server::io_worker::handle_socket_read(connection_state& conn, int fd) {
 }
 
 void server::io_worker::process_request(int fd) {
+    util::log::debug("Parsing request on fd {}", fd);
     auto it = m_connections.find(fd);
     if (it == m_connections.end()) return;
     
@@ -609,6 +630,7 @@ void server::io_worker::process_request(int fd) {
 
 // Extracted to fix SonarCloud Cognitive Complexity > 15
 void server::io_worker::route_parsed_request(int fd, uint64_t conn_id, http::request req) {
+    util::log::debug("Received request for '{}' from {}", req.get_path(), req.get_remote_ip());
     const std::string request_id_str(req.get_header_value("x-request-id").value_or(""));
     const util::log::request_id_scope rid_scope(request_id_str);    
 

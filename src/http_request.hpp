@@ -73,7 +73,6 @@ enum class method {
     post,
     put,
     options,
-    head,
     patch,
     unknown,
     any
