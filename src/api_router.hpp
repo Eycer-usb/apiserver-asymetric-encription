@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <functional>
 #include <memory>
+#include <regex>
 
 // A type alias for our API handler functions
 using api_handler_func = std::function<void(const http::request&, http::response&)>;
@@ -25,6 +26,7 @@ struct api_endpoint {
     validator_func validator;
     api_handler_func handler;
     bool is_secure;
+    std::optional<std::regex> path_regex;
 };
 
 /**
@@ -47,7 +49,7 @@ public:
         validator_func vf = [v](const http::request& req) {
             v.validate(req);
         };
-        m_routes[path.get()] = {method, std::move(vf), std::move(handler), is_secure};
+        m_routes[path.get()] = {method, std::move(vf), std::move(handler), is_secure, std::nullopt};
     }
 
     /**
@@ -58,7 +60,20 @@ public:
         validator_func vf = [](const http::request&){
             // This lambda is intentionally empty as no validation is needed for this endpoint type.
         };
-        m_routes[path.get()] = {method, std::move(vf), std::move(handler), is_secure};
+        m_routes[path.get()] = {method, std::move(vf), std::move(handler), is_secure, std::nullopt};
+    }
+    
+    /**
+     * @brief Registra un endpoint usando una expresión regular.
+     */
+    void register_api_regex(std::string pattern, http::method method, api_handler_func handler, bool is_secure = true) {
+        validator_func vf = [](const http::request&){};
+        
+        // Guardamos en una estructura separada o marcamos el endpoint
+        m_regex_routes.push_back({
+            std::regex(pattern, std::regex::optimize), 
+            {method, std::move(vf), std::move(handler), is_secure, std::regex(pattern)}
+        });
     }
 
     /**
@@ -67,8 +82,17 @@ public:
      * @return A pointer to the api_endpoint if found, otherwise nullptr.
      */
     [[nodiscard]] const api_endpoint* find_handler(std::string_view path) const {
+        // 1. Intentar búsqueda exacta (O(1)) para máxima velocidad
         if (auto it = m_routes.find(path); it != m_routes.end()) {
             return &it->second;
+        }
+
+        // 2. Si no hay match exacto, buscar en rutas regex (O(N))
+        std::string path_str(path);
+        for (const auto& [re, endpoint] : m_regex_routes) {
+            if (std::regex_match(path_str, re)) {
+                return &endpoint;
+            }
         }
         return nullptr;
     }
@@ -77,6 +101,9 @@ private:
     // NOTE: The key is string_view, which is efficient but assumes the lifetime
     // of the path string is managed externally (which is true for webapi_path).
     std::unordered_map<std::string_view, api_endpoint> m_routes;
+
+    // Almacenamos el regex compilado y su endpoint asociado
+    std::vector<std::pair<std::regex, api_endpoint>> m_regex_routes;
 };
 
 #endif // API_ROUTER_HPP

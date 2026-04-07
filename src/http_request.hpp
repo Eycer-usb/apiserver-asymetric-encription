@@ -71,8 +71,12 @@ struct param_error {
 enum class method {
     get,
     post,
+    put,
     options,
-    unknown
+    head,
+    patch,
+    unknown,
+    any
 };
 
 // Forward declaration

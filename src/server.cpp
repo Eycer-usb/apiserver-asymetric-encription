@@ -292,7 +292,9 @@ bool server::io_worker::validate_token(const http::request& req) const {
 void server::io_worker::execute_handler(const http::request& request_ref, http::response& res, const api_endpoint* endpoint) const {
     using enum http::status;
     try {
-        if (endpoint->method != request_ref.get_method()) {
+        bool method_matches = (endpoint->method == http::method::any) || 
+                         (endpoint->method == request_ref.get_method());
+        if (!method_matches) {
             res.set_body(bad_request, R"({"error":"Method Not Allowed"})");
             return;
         }

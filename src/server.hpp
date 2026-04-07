@@ -90,6 +90,10 @@ public:
         m_router.register_api(path, method, std::move(handler), is_secure);
     }
 
+    void register_api_regex(std::string pattern, http::method method, api_handler_func handler, bool is_secure = true) {
+        m_router.register_api_regex(std::move(pattern), method, std::move(handler), is_secure);
+    }
+
     void start();
 
 private:
