@@ -36,5 +36,10 @@ export REMOTE_API_URL="https://cppserver.com"
 export REMOTE_API_USER="mcordova"
 export REMOTE_API_PASS="basica"
 
+
+
+# AES encryption configuration
+export AES_KEY="B@asica2025*uuid0998554j93m722pQ"
+
 # executable
 ./apiserver_debug
