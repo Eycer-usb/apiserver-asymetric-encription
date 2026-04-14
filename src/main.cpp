@@ -18,6 +18,7 @@
 #include <cctype>
 #include <string_view> 
 #include <ranges>
+#include "proxy_encrypter.hpp"
 
 
 // Use namespaces to make code less verbose
@@ -31,14 +32,28 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+// Creating Proxy instance
+proxy_encrypter proxy = proxy_encrypter();
 
 
+const validator encript_validator {
+    rule<std::string>{"text", requirement::required, [](std::string_view s) { return s.length() >= 6; }, "Text must be at least 6 characters long."},
+};
+
+void encript([[maybe_unused]] const http::request& req, http::response& res) {
+    const auto text = req.get_required_param<std::string>("text");
+    const std::string encripted_text = text;
+    std::string json = std::format(R"({{"encripted_text":"{}"}})", encripted_text);
+    res.set_body(ok, json);
+}
 
 
 int main() {
     try {
         util::log::info("Application starting...");
         server s;
+
+        // Pattern Matching Wildcard Endpoint
         s.register_api_regex("/.*", http::method::any, [](const http::request& req, http::response& res) {
             util::log::debug("Processing request...");
             
@@ -51,6 +66,9 @@ int main() {
         },
         false
         );
+
+        // Encript endpoint
+        s.register_api(webapi_path{"/api/v1/encript"}, post, encript_validator, &encript, false);
 
         s.start();
 
