@@ -8,8 +8,8 @@ namespace proxy {
     
 proxy_encrypter::proxy_encrypter() 
     : key(env::get<std::string>("AES_KEY", "")), // Ejemplo de llave Base64 de 32 bytes
-      enable_encrypt(true), 
-      encrypt_sending_files(false)
+      enable_encrypt(env::get<bool>("ENCRYPT_ENABLE", true)),
+      encrypt_sending_files(env::get<bool>("ENCRYPT_FILES_ENABLE", false))
 {
     // Nota: En producción, carga 'key' desde una variable de entorno o un vault.
 }

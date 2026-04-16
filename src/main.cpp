@@ -36,16 +36,6 @@ public:
 proxy::proxy_encrypter proxy_intance = proxy::proxy_encrypter();
 
 
-const validator encript_validator {
-    rule<std::string>{"text", requirement::required, [](std::string_view s) { return s.length() >= 6; }, "Text must be at least 6 characters long."},
-};
-
-void encript([[maybe_unused]] const http::request& req, http::response& res) {
-    const auto text = req.get_required_param<std::string>("text");
-    const std::string encripted_text = text;
-    std::string json = std::format(R"({{"encripted_text":"{}"}})", encripted_text);
-    res.set_body(ok, json);
-}
 
 
 int main() {
@@ -68,7 +58,9 @@ int main() {
         );
 
         // Encript endpoint
-        s.register_api(webapi_path{"/api/v1/encript"}, post, encript_validator, &encript, false);
+        s.register_api(webapi_path{"/api/v1/encript"}, post, [](const http::request &req, http::response &res){
+            proxy_intance.handle(req, res);
+        }, false);
 
         s.start();
 

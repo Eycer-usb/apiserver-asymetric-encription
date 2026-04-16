@@ -41,5 +41,9 @@ export REMOTE_API_PASS="basica"
 # AES encryption configuration
 export AES_KEY="B@asica2025*uuid0998554j93m722pQ"
 
+# Encryption Configuration
+export ENCRYPT_ENABLE=1
+export ENCRYPT_FILES_ENABLE=1
+
 # executable
 ./apiserver_debug
