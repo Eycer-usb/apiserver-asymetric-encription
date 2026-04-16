@@ -130,6 +130,44 @@ public:
      */
     [[nodiscard]] http_response post(const std::string& url, const std::vector<http_form_part>& form_parts, const std::map<std::string, std::string, std::less<>>& headers = {});
 
+    /**
+     * @brief Performs an HTTP PUT request with a raw string body.
+     * @param url The target URL for the PUT request.
+     * @param body The data to be sent in the request body.
+     * @param headers A map of request headers.
+     * @return An http_response struct containing the server's response.
+     * @throws curl_exception on failure.
+     */
+    [[nodiscard]] http_response put(const std::string& url, const std::string& body, const std::map<std::string, std::string, std::less<>>& headers = {});
+
+    /**
+     * @brief Performs an HTTP DELETE request.
+     * @param url The target URL for the DELETE request.
+     * @param headers A map of request headers.
+     * @return An http_response struct containing the server's response.
+     * @throws curl_exception on failure.
+     */
+    [[nodiscard]] http_response del(const std::string& url, const std::map<std::string, std::string, std::less<>>& headers = {});
+
+    /**
+     * @brief Performs an HTTP PATCH request with a raw string body.
+     * @param url The target URL for the PATCH request.
+     * @param body The data to be sent in the request body.
+     * @param headers A map of request headers.
+     * @return An http_response struct containing the server's response.
+     * @throws curl_exception on failure.
+     */
+    [[nodiscard]] http_response patch(const std::string& url, const std::string& body, const std::map<std::string, std::string, std::less<>>& headers = {});
+
+    /**
+     * @brief Performs an HTTP OPTIONS request.
+     * @param url The target URL for the OPTIONS request.
+     * @param headers A map of request headers.
+     * @return An http_response struct containing the server's response.
+     * @throws curl_exception on failure.
+     */
+    [[nodiscard]] http_response options(const std::string& url, const std::map<std::string, std::string, std::less<>>& headers = {});
+
 private:
     class impl;
     std::unique_ptr<impl> pimpl_;

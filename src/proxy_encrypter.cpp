@@ -31,8 +31,64 @@ void proxy_encrypter::handle(const http::request& req, http::response& res) {
     
 }
 
-http_response proxy_encrypter::execute_request(request_options options){
-    
+http_response proxy_encrypter::execute_request(request_options options) {
+    try {
+        // Get the backend URL from environment variables
+        const std::string backend_url = env::get<std::string>("BACKEND_URL", "http://localhost:8080");
+        
+        // Construct the full URL
+        std::string full_url = backend_url;
+        if (!options.path.empty()) {
+            // Ensure proper URL formatting
+            if (!full_url.empty() && full_url.back() == '/') {
+                full_url.pop_back(); // Remove trailing slash from base URL
+            }
+            if (!options.path.empty() && options.path[0] != '/') {
+                full_url += '/';
+            }
+            full_url += options.path;
+        }
+        
+        util::log::debug("Executing request to: {}", full_url);
+        util::log::debug("Method: {}", static_cast<int>(options.method));
+        
+        // Create HTTP client with default configuration
+        http_client client;
+        
+        // Execute the request based on the HTTP method
+        http_response response;
+        switch (options.method) {
+            case http::method::get:
+                response = client.get(full_url, options.headers);
+                break;
+            case http::method::post:
+                response = client.post(full_url, options.body, options.headers);
+                break;
+            case http::method::put:
+                response = client.put(full_url, options.body, options.headers);
+                break;
+            case http::method::patch:
+                response = client.patch(full_url, options.body, options.headers);
+                break;
+            case http::method::options:
+                response = client.options(full_url, options.headers);
+                break;
+            default:
+                util::log::error("Unsupported HTTP method: {}", static_cast<int>(options.method));
+                throw std::runtime_error("Unsupported HTTP method");
+        }
+        
+        util::log::debug("Request completed with status: {}", response.status_code);
+        
+        return response;
+        
+    } catch (const curl_exception& e) {
+        util::log::error("CURL error in execute_request: {}", e.what());
+        throw;
+    } catch (const std::exception& e) {
+        util::log::error("Error in execute_request: {}", e.what());
+        throw;
+    }
 }
 
 void proxy_encrypter::handle_request(const http::request& req, request_options& options) {
@@ -99,21 +155,6 @@ void proxy_encrypter::get_body(const std::string_view* body, std::string& new_bo
 
 void proxy_encrypter::handle_response(http_response server_response, http::response& res) {
     if (!this->enable_encrypt) return;
-
-    // try {
-    //     std::string encrypted_body = res.get_body();
-    //     if (!encrypted_body.empty()) {
-    //         // Desciframos la respuesta del servidor antes de entregarla al cliente
-    //         std::string decrypted = aes_gcm::decrypt(encrypted_body, key);
-    //         res.set_body(decrypted);
-            
-    //         util::log::debug("Response body decrypted successfully.");
-    //     }
-    // } catch (const std::exception& e) {
-    //     // Si el tag no coincide, aes_gcm lanzará una excepción aquí.
-    //     util::log::error("Decryption error in response: " + std::string(e.what()));
-    //     res.set_status(http::status::bad_request);
-    //     res.set_body("Integrity check failed: Data tampered or wrong key.");
-    // }
+    res.set_body(http::status::ok, "Respuesta");
 }
 }

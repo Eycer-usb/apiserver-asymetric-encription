@@ -39,11 +39,14 @@ export REMOTE_API_PASS="basica"
 
 
 # AES encryption configuration
-export AES_KEY="B@asica2025*uuid0998554j93m722pQ"
+export AES_KEY="ER+++skiK9wlfyzqTGJI42iFnueKuRnlxWBQzv751gA="
 
 # Encryption Configuration
 export ENCRYPT_ENABLE=1
 export ENCRYPT_FILES_ENABLE=1
+
+# BACKEND URL
+BACKEND_URL="http://localhost:8000"
 
 # executable
 ./apiserver_debug
