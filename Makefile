@@ -37,7 +37,7 @@ TARGET_SERVER_SANITIZER_LEAK = apiserver_sanitizer_leak
 
 # --- Source File Lists ---
 SERVER_SRCS = main.cpp
-COMMON_LIB_SRCS = http_client.cpp http_request.cpp json_parser.cpp pkeyutil.cpp sql.cpp jwt.cpp
+COMMON_LIB_SRCS = http_client.cpp http_request.cpp json_parser.cpp pkeyutil.cpp sql.cpp jwt.cpp proxy_encrypter.cpp
 SERVER_LIB_SRCS = server.cpp
 
 # --- Object File Definitions ---

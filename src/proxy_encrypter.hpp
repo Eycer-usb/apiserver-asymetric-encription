@@ -52,6 +52,7 @@ private:
     void get_body(const std::string_view* body, std::string& new_body, interlayer_parameters& params);
     void handle_request(const http::request& req, request_options& out_options);
     void handle_response(http_response server_response, http::response& res);
+    http_response execute_request(request_options options);
 };
 
 }

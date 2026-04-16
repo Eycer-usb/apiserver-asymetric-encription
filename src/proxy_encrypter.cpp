@@ -21,16 +21,21 @@ void proxy_encrypter::handle(const http::request& req, http::response& res) {
     {
         request_options options;
         this->handle_request(req, options);
+        const http_response response = this->execute_request(options);
+        this->handle_response(response, res);
     }
     catch(const std::exception& e)
     {
-        util::log::debug("Error processing request decryption");
+        util::log::debug("Error processing request");
     }
-    
     
 }
 
-void proxy::proxy_encrypter::handle_request(const http::request& req, request_options& options) {
+http_response proxy_encrypter::execute_request(request_options options){
+    
+}
+
+void proxy_encrypter::handle_request(const http::request& req, request_options& options) {
     try {
         const std::string_view path = req.get_path();
         const auto token_opt = req.get_bearer_token();
@@ -52,28 +57,38 @@ void proxy::proxy_encrypter::handle_request(const http::request& req, request_op
         interlayer_parameters inter_params;
 
         
-        this->get_path(path, options.path, inter_params);
-        util::log::debug("New Path: {}", options.path);
+        try
+        {
+            this->get_path(path, options.path, inter_params);
+            util::log::debug("New Path: {}", options.path);
 
-        // Para el token, extraemos el valor del opcional o un string vacío
-        this->get_token(token_opt, options.headers["Authorization"], inter_params);
+            // Para el token, extraemos el valor del opcional o un string vacío
+            this->get_token(token_opt, options.headers["Authorization"], inter_params);
+            
+            // Si el token fue procesado, le añadimos el prefijo Bearer
+            if (!options.headers["Authorization"].empty()) {
+                options.headers["Authorization"] = std::format("Bearer {}", options.headers["Authorization"]);
+            }
+
+            if (body_ptr) {
+                this->get_body(body_ptr, options.body, inter_params);
+                util::log::debug("New body: {}", options.body);
+            }
+
+            // 4. Sincronizar el método original
+            options.method = req.get_method();
+        }
+        catch(const std::exception& e)
+        {
+            // Continue with original resources
+            util::log::debug("Continue with original resources");
+            // TODO
+        }
         
-        // Si el token fue procesado, le añadimos el prefijo Bearer
-        if (!options.headers["Authorization"].empty()) {
-            options.headers["Authorization"] = std::format("Bearer {}", options.headers["Authorization"]);
-        }
-
-        if (body_ptr) {
-            this->get_body(body_ptr, options.body, inter_params);
-            util::log::debug("New body: {}", options.body);
-        }
-
-        // 4. Sincronizar el método original
-        options.method = req.get_method();
 
     } catch (const std::exception& e) {
-        // En C++20 no necesitas std::string(e.what()), el formateador lo reconoce
         util::log::error("Encryption error in request: {}", e.what());
+        throw e;
     }
 }
 

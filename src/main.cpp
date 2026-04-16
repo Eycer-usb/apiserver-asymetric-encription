@@ -33,7 +33,7 @@ public:
 };
 
 // Creating Proxy instance
-proxy_encrypter proxy = proxy_encrypter();
+proxy::proxy_encrypter proxy_intance = proxy::proxy_encrypter();
 
 
 const validator encript_validator {
