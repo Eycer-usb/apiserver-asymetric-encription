@@ -5,7 +5,29 @@
 
 
 namespace proxy {
-    
+
+const int8_t req_sign_delimiter_position = 112; // lenght from Encryption(key{100} + timestamp_b64{12}) = 112
+const int8_t key_encrypted_length = 100;
+const int8_t timestamp_b64_length = 12;
+const int8_t req_type_spec_length = 68;
+
+void trim_inplace(std::string_view& vista, std::string_view espacios = " \t\n\r\f\v") {
+    // Quitar del principio (Left Trim)
+    size_t inicio = vista.find_first_not_of(espacios);
+    if (inicio == std::string_view::npos) {
+        vista = ""; // Todo era espacio
+        return;
+    }
+    vista.remove_prefix(inicio);
+
+    // Quitar del final (Right Trim)
+    size_t fin = vista.find_last_not_of(espacios);
+    if (fin != std::string_view::npos) {
+        vista.remove_suffix(vista.size() - fin - 1);
+    }
+}
+
+
 proxy_encrypter::proxy_encrypter() 
     : key(env::get<std::string>("AES_KEY", "")), // Ejemplo de llave Base64 de 32 bytes
       enable_encrypt(env::get<bool>("ENCRYPT_ENABLE", true)),
@@ -20,9 +42,9 @@ void proxy_encrypter::handle(const http::request& req, http::response& res) {
     try
     {
         request_options options;
-        this->handle_request(req, options);
+        this->decrypt_request(req, options);
         const http_response response = this->execute_request(options);
-        this->handle_response(response, res);
+        this->encrypt_response(res, response);
     }
     catch(const std::exception& e)
     {
@@ -57,26 +79,28 @@ http_response proxy_encrypter::execute_request(request_options options) {
         
         // Execute the request based on the HTTP method
         http_response response;
-        switch (options.method) {
-            case http::method::get:
-                response = client.get(full_url, options.headers);
-                break;
-            case http::method::post:
-                response = client.post(full_url, options.body, options.headers);
-                break;
-            case http::method::put:
-                response = client.put(full_url, options.body, options.headers);
-                break;
-            case http::method::patch:
-                response = client.patch(full_url, options.body, options.headers);
-                break;
-            case http::method::options:
-                response = client.options(full_url, options.headers);
-                break;
-            default:
-                util::log::error("Unsupported HTTP method: {}", static_cast<int>(options.method));
-                throw std::runtime_error("Unsupported HTTP method");
-        }
+        std::visit([&](const auto& real_content){
+            switch (options.method) {
+                case http::method::get:
+                    response = client.get(full_url, options.headers);
+                    break;
+                case http::method::post:
+                    response = client.post(full_url, real_content, options.headers);
+                    break;
+                case http::method::put:
+                    response = client.put(full_url, real_content, options.headers);
+                    break;
+                case http::method::patch:
+                    response = client.patch(full_url, real_content, options.headers);
+                    break;
+                case http::method::options:
+                    response = client.options(full_url, options.headers);
+                    break;
+                default:
+                    util::log::error("Unsupported HTTP method: {}", static_cast<int>(options.method));
+                    throw std::runtime_error("Unsupported HTTP method");
+            }
+        }, options.body);
         
         util::log::debug("Request completed with status: {}", response.status_code);
         
@@ -91,11 +115,11 @@ http_response proxy_encrypter::execute_request(request_options options) {
     }
 }
 
-void proxy_encrypter::handle_request(const http::request& req, request_options& options) {
+void proxy_encrypter::decrypt_request(const http::request& req, request_options& options) {
     try {
         const std::string_view path = req.get_path();
-        const auto token_opt = req.get_bearer_token();
-        const auto& body_variant = req.get_body();
+        const std::optional<std::string_view> token_opt = req.get_bearer_token();
+        const http::request_body& body_variant = req.get_body();
         const std::string_view* body_ptr = std::get_if<std::string_view>(&body_variant);
 
         util::log::debug("Original Path: {}", path);
@@ -109,29 +133,17 @@ void proxy_encrypter::handle_request(const http::request& req, request_options& 
             util::log::warn("Invalid Request: Path is empty");
             return; 
         }
-
-        interlayer_parameters inter_params;
-
         
         try
         {
-            this->get_path(path, options.path, inter_params);
+            this->get_path_and_sign(path, options);
             util::log::debug("New Path: {}", options.path);
 
-            // Para el token, extraemos el valor del opcional o un string vacío
-            this->get_token(token_opt, options.headers["Authorization"], inter_params);
-            
-            // Si el token fue procesado, le añadimos el prefijo Bearer
-            if (!options.headers["Authorization"].empty()) {
-                options.headers["Authorization"] = std::format("Bearer {}", options.headers["Authorization"]);
-            }
+          
+            this->get_token(token_opt, options);
+            this->get_body_and_sign(body_ptr, options);
+            util::log::debug("New body: {}", options.body);
 
-            if (body_ptr) {
-                this->get_body(body_ptr, options.body, inter_params);
-                util::log::debug("New body: {}", options.body);
-            }
-
-            // 4. Sincronizar el método original
             options.method = req.get_method();
         }
         catch(const std::exception& e)
@@ -148,12 +160,60 @@ void proxy_encrypter::handle_request(const http::request& req, request_options& 
     }
 }
 
-void proxy_encrypter::get_path(std::string_view path, std::string& new_path, interlayer_parameters& params){}
-void proxy_encrypter::get_token(const std::optional<std::string_view> token, std::string& new_token, interlayer_parameters& params){}
-void proxy_encrypter::get_body(const std::string_view* body, std::string& new_body, interlayer_parameters& params){}
+void proxy_encrypter::get_path_and_sign(std::string_view path, request_options& params){
+        
+    const std::string_view request_sign = path.substr(0, req_sign_delimiter_position);
+    const std::string_view path_key_e = path.substr(req_sign_delimiter_position);
+
+    // Timestamp
+    const std::string_view time_key_e = std::string_view(aes_gcm::decrypt(request_sign, key));
+    params.timestamp = aes_gcm::b64_to_timestamp(time_key_e.substr(0, timestamp_b64_length));
+    
+    // Path
+    const std::string_view key_e = time_key_e.substr(timestamp_b64_length, key_encrypted_length);
+    const std::string key = aes_gcm::decrypt(key_e, key);
+    const std::string path_key = aes_gcm::decrypt(path_key_e, key);
+    
+    // Asignation
+    params.key = aes_gcm::decrypt(path_key.substr(0, key_encrypted_length), key);
+    params.body = path_key.substr(key_encrypted_length);
+}
 
 
-void proxy_encrypter::handle_response(http_response server_response, http::response& res) {
+void proxy_encrypter::get_token(const std::optional<std::string_view> token, request_options& params){
+    std::string_view key_t = params.key;
+    if(!token.has_value()){
+        return;
+    }
+    std::string token_dec = aes_gcm::decrypt(token.value(), key_t);
+    params.key = aes_gcm::decrypt(token_dec.substr(0, key_encrypted_length), key);
+    params.headers["Authorization"] = "Bearer " + token_dec.substr(key_encrypted_length);
+}
+
+
+void proxy_encrypter::get_body_and_sign(const std::string_view* body, request_options& params){
+    std::string_view key_bs = params.key;
+    const std::string_view req_type_and_key_e = aes_gcm::decrypt(body->substr(0, 260), key_bs); // lenght req_type_and_key_e = 168
+    std::string_view req_type = req_type_and_key_e.substr(0, req_type_spec_length);
+    trim_inplace(req_type);
+    params.headers["Content-Type"] = req_type;
+    std::string_view key_b = aes_gcm::decrypt(req_type_and_key_e.substr(req_type_spec_length), key);
+    params.body = this->body_factory(aes_gcm::decrypt(body->substr(260), key_b), req_type);
+}
+
+std::string proxy_encrypter::body_factory(std::string body_raw, std::string_view req_type){
+    if(req_type.compare("application/json")){
+        // TODO: Parse json
+    }
+    else{
+        // TODO Parse multipart-form-data
+
+    }
+}
+
+
+
+void proxy_encrypter::encrypt_response(http::response& res, http_response server_response) {
     if (!this->enable_encrypt) return;
     res.set_body(http::status::ok, "Respuesta");
 }

@@ -12,16 +12,12 @@ namespace proxy {
 
     
 struct request_options {
+    std::string key;
+    int64_t timestamp;
     std::string path;
     std::map<std::string, std::string, std::less<>> headers;
     http::method method;
-    std::string body;
-};
-
-struct interlayer_parameters
-{
-    std::vector<uint8_t> positions;
-    std::string key;
+    std::variant<std::string, http_form_file> body;
 };
 
 
@@ -49,12 +45,13 @@ protected:
     std::string separator;
 
 private:
-    void get_path(const std::string_view path, std::string& new_path, interlayer_parameters& params);
-    void get_token(const std::optional<std::string_view> token, std::string& new_token, interlayer_parameters& params);
-    void get_body(const std::string_view* body, std::string& new_body, interlayer_parameters& params);
-    void handle_request(const http::request& req, request_options& out_options);
-    void handle_response(http_response server_response, http::response& res);
+    void get_path_and_sign(const std::string_view path, request_options& params);
+    void get_token(const std::optional<std::string_view> token, request_options& params);
+    void get_body_and_sign(const std::string_view* body, request_options& params);
+    void decrypt_request(const http::request& req, request_options& out_options);
     http_response execute_request(request_options options);
+    void encrypt_response(http::response& res, http_response server_response);
+    std::string proxy_encrypter::body_factory(std::string body_raw, std::string_view req_type);
 };
 
 }

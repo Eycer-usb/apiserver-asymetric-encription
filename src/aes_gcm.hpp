@@ -101,6 +101,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -674,6 +675,73 @@ namespace aes_gcm {
         if (peek[0] == MAGIC_CHUNKED)
             return detail::decrypt_parallel(ciphertext_b64, kb, st.n_threads);
         return detail::decrypt_single(ciphertext_b64, kb);
+    }
+
+
+    // -------------------------------------------------------------------------
+    // timestamp_to_b64(ms_epoch) → base64 string  [always 12 chars]
+    //
+    // Encodes a 64-bit millisecond timestamp as a fixed-length base64 string.
+    //
+    // Encoding:
+    //   • The int64_t is stored as 8 bytes in big-endian (network) byte order.
+    //     Big-endian preserves lexicographic sort order: if ts_a < ts_b then
+    //     b64(ts_a) < b64(ts_b) as strings — useful for sorted indexes/keys.
+    //   • base64(8 bytes) = exactly 12 chars, always ending in "==".
+    //
+    // Example:
+    //   timestamp_to_b64(1_713_260_400_000)  →  "AAABjuZHDYA="  (12 chars)
+    //   timestamp_to_b64(0)                  →  "AAAAAAAAAAA="
+    //   timestamp_to_b64(INT64_MAX)          →  "f/////////8="
+    // -------------------------------------------------------------------------
+    inline std::string timestamp_to_b64(int64_t ms_epoch) {
+        // Big-endian: lexicographic order == chronological order
+        const uint64_t u = static_cast<uint64_t>(ms_epoch);
+        uint8_t raw[8] = {
+            static_cast<uint8_t>(u >> 56), static_cast<uint8_t>(u >> 48),
+            static_cast<uint8_t>(u >> 40), static_cast<uint8_t>(u >> 32),
+            static_cast<uint8_t>(u >> 24), static_cast<uint8_t>(u >> 16),
+            static_cast<uint8_t>(u >>  8), static_cast<uint8_t>(u)
+        };
+        // base64(8 bytes) = ceil(8/3)*4 = 12 chars, always ends in "=="
+        std::string out(12, '\0');
+        detail::b64_encode_into(raw, 8, out.data());
+        return out;
+    }
+
+    // -------------------------------------------------------------------------
+    // b64_to_timestamp(b64) → int64_t milliseconds from epoch
+    //
+    // Inverse of timestamp_to_b64(). Input must be exactly 12 base64 chars.
+    // Throws std::invalid_argument on wrong length or invalid base64.
+    //
+    // Example:
+    //   b64_to_timestamp("AAABjuZHDYA=")  →  1713260400000
+    // -------------------------------------------------------------------------
+    inline int64_t b64_to_timestamp(std::string_view b64) {
+        if (b64.size() != 12)
+            throw std::invalid_argument(
+                "aes_gcm::b64_to_timestamp: expected 12 chars, got "
+                + std::to_string(b64.size()));
+
+        uint8_t raw[8] = {};
+        const size_t n = detail::b64_decode_into(b64.data(), 12, raw);
+        if (n != 8)
+            throw std::invalid_argument(
+                "aes_gcm::b64_to_timestamp: decoded " + std::to_string(n)
+                + " bytes, expected 8");
+
+        const uint64_t u =
+            (static_cast<uint64_t>(raw[0]) << 56) |
+            (static_cast<uint64_t>(raw[1]) << 48) |
+            (static_cast<uint64_t>(raw[2]) << 40) |
+            (static_cast<uint64_t>(raw[3]) << 32) |
+            (static_cast<uint64_t>(raw[4]) << 24) |
+            (static_cast<uint64_t>(raw[5]) << 16) |
+            (static_cast<uint64_t>(raw[6]) <<  8) |
+             static_cast<uint64_t>(raw[7]);
+
+        return static_cast<int64_t>(u);
     }
 
 } // namespace aes_gcm
