@@ -141,6 +141,16 @@ public:
     [[nodiscard]] http_response put(const std::string& url, const std::string& body, const std::map<std::string, std::string, std::less<>>& headers = {});
 
     /**
+     * @brief Performs a multipart/form-data HTTP PUT request.
+     * @param url The target URL for the PUT request.
+     * @param form_parts A vector of http_form_part objects.
+     * @param headers A map of request headers.
+     * @return An http_response struct containing the server's response.
+     * @throws curl_exception on failure.
+     */
+    [[nodiscard]] http_response put(const std::string& url, const std::vector<http_form_part>& form_parts, const std::map<std::string, std::string, std::less<>>& headers = {});
+
+    /**
      * @brief Performs an HTTP DELETE request.
      * @param url The target URL for the DELETE request.
      * @param headers A map of request headers.
@@ -148,6 +158,16 @@ public:
      * @throws curl_exception on failure.
      */
     [[nodiscard]] http_response del(const std::string& url, const std::map<std::string, std::string, std::less<>>& headers = {});
+
+    /**
+     * @brief Performs a multipart/form-data HTTP DELETE request.
+     * @param url The target URL for the DELETE request.
+     * @param form_parts A vector of http_form_part objects.
+     * @param headers A map of request headers.
+     * @return An http_response struct containing the server's response.
+     * @throws curl_exception on failure.
+     */
+    [[nodiscard]] http_response del(const std::string& url, const std::vector<http_form_part>& form_parts, const std::map<std::string, std::string, std::less<>>& headers = {});
 
     /**
      * @brief Performs an HTTP PATCH request with a raw string body.
@@ -160,6 +180,16 @@ public:
     [[nodiscard]] http_response patch(const std::string& url, const std::string& body, const std::map<std::string, std::string, std::less<>>& headers = {});
 
     /**
+     * @brief Performs a multipart/form-data HTTP PATCH request.
+     * @param url The target URL for the PATCH request.
+     * @param form_parts A vector of http_form_part objects.
+     * @param headers A map of request headers.
+     * @return An http_response struct containing the server's response.
+     * @throws curl_exception on failure.
+     */
+    [[nodiscard]] http_response patch(const std::string& url, const std::vector<http_form_part>& form_parts, const std::map<std::string, std::string, std::less<>>& headers = {});
+
+    /**
      * @brief Performs an HTTP OPTIONS request.
      * @param url The target URL for the OPTIONS request.
      * @param headers A map of request headers.
@@ -167,6 +197,16 @@ public:
      * @throws curl_exception on failure.
      */
     [[nodiscard]] http_response options(const std::string& url, const std::map<std::string, std::string, std::less<>>& headers = {});
+
+    /**
+     * @brief Performs a multipart/form-data HTTP OPTIONS request.
+     * @param url The target URL for the OPTIONS request.
+     * @param form_parts A vector of http_form_part objects.
+     * @param headers A map of request headers.
+     * @return An http_response struct containing the server's response.
+     * @throws curl_exception on failure.
+     */
+    [[nodiscard]] http_response options(const std::string& url, const std::vector<http_form_part>& form_parts, const std::map<std::string, std::string, std::less<>>& headers = {});
 
 private:
     class impl;

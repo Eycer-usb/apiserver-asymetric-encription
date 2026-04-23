@@ -251,14 +251,30 @@ http_client& http_client::operator=(http_client&&) noexcept = default;
     return pimpl_->perform_request(url, body, std::nullopt, headers);
 }
 
+[[nodiscard]] http_response http_client::put(const std::string& url, const std::vector<http_form_part>& form_parts, const std::map<std::string, std::string, std::less<>>& headers) {
+    return pimpl_->perform_request(url, std::nullopt, form_parts, headers);
+}
+
 [[nodiscard]] http_response http_client::del(const std::string& url, const std::map<std::string, std::string, std::less<>>& headers) {
     return pimpl_->perform_request(url, std::nullopt, std::nullopt, headers);
+}
+
+[[nodiscard]] http_response http_client::del(const std::string& url, const std::vector<http_form_part>& form_parts, const std::map<std::string, std::string, std::less<>>& headers) {
+    return pimpl_->perform_request(url, std::nullopt, form_parts, headers);
 }
 
 [[nodiscard]] http_response http_client::patch(const std::string& url, const std::string& body, const std::map<std::string, std::string, std::less<>>& headers) {
     return pimpl_->perform_request(url, body, std::nullopt, headers);
 }
 
+[[nodiscard]] http_response http_client::patch(const std::string& url, const std::vector<http_form_part>& form_parts, const std::map<std::string, std::string, std::less<>>& headers) {
+    return pimpl_->perform_request(url, std::nullopt, form_parts, headers);
+}
+
 [[nodiscard]] http_response http_client::options(const std::string& url, const std::map<std::string, std::string, std::less<>>& headers) {
     return pimpl_->perform_request(url, std::nullopt, std::nullopt, headers);
+}
+
+[[nodiscard]] http_response http_client::options(const std::string& url, const std::vector<http_form_part>& form_parts, const std::map<std::string, std::string, std::less<>>& headers) {
+    return pimpl_->perform_request(url, std::nullopt, form_parts, headers);
 }
